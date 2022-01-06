@@ -311,7 +311,8 @@ export default class App extends Vue {
     
         const input = webmidi.inputs[0];
         input.addListener("midimessage", "all", e =>  { 
-          if (e.data[1] == 64)
+          console.log(e);
+          if (e.data[0] >> 4 == 11 && e.data[1] == 64)
           {
             if (e.data[2] <= 63)
               this.midiBatcher.endSustain();
