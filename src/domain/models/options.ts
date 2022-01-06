@@ -2,6 +2,7 @@ import { Note, PitchClass, ScientificNote, scientificNote } from "./notes";
 
 export type ViewMode = { single: boolean; overtoneGrid: boolean; randomPixelation: boolean; concentricPixelation: boolean; }
 
+export type DisplayConfig = { tickMilliseconds: number; waitBeforeClearMilliseconds: number; }
 export type CircleConfig = { tonic: PitchClass; degreeOffset: number }
 export type MixBias = { rootBias: number; melodyBias: number; }
 export type RenderBias = { rootBias: number; middleBias: number; melodyBias: number; emergentBias: number }
@@ -10,6 +11,7 @@ export type OvertoneConfig = { numberOvertones: number; backoffCoefficient: numb
 export type CanvasOptions = { width: number; height: number; }
 
 export type Options = {
+    display: DisplayConfig;
     circle: CircleConfig;
     viewMode: ViewMode;
     canvas: CanvasOptions;
@@ -31,6 +33,7 @@ export type Priorities = {
 }
 
 export const defaultOptions: Options = {
+    display: { waitBeforeClearMilliseconds: 100, tickMilliseconds: 50},
     circle: { tonic: "C", degreeOffset: 60 },
     viewMode: { single: false, overtoneGrid: false, randomPixelation: false, concentricPixelation: true },
     canvas: { width: 1800, height: 1190 },

@@ -154,12 +154,21 @@ export default class App extends Vue {
       const ctx = canvas.getContext("2d")!;
       this.ctx = ctx;
 
+      let noNotesForMs = 0;
+      const tryClear = () => {
+        if (noNotesForMs > this.options.display.waitBeforeClearMilliseconds) {
+          ctx.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
+          noNotesForMs = 0;
+        } else {
+          noNotesForMs += this.options.display.tickMilliseconds;
+        }
+      }
+
       const renderSingleColor = () => {
           const colors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
           if (colors.length == 0)
-          {
-            ctx?.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
-          }
+            tryClear();
+          
           else
           {
             const color = mixColors(this.options.mix, colors);
@@ -174,9 +183,8 @@ export default class App extends Vue {
       const renderOvertonesGrid = () => {
         const colors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
         if (colors.length == 0)
-        {
-          ctx?.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
-        }
+          tryClear();
+
         else
         {
           const withOvertones = colors.map(c => colorOvertones(c, this.options.overtone).map(wc => wc.color));
@@ -190,9 +198,8 @@ export default class App extends Vue {
       const pixelateRandomly = () => {
         const rawColors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
         if (rawColors.length == 0)
-        {
-          ctx?.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
-        }
+          tryClear();
+        
         else
         {
           // first, weight with overtones, then weight with root/middle/etc. etc.?
@@ -227,9 +234,8 @@ export default class App extends Vue {
       const pixelateConcentrically = () => {
         const rawColors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
         if (rawColors.length == 0)
-        {
-          ctx?.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
-        }
+          tryClear();
+        
         else
         {
           // first, weight with overtones, then weight with root/middle/etc. etc.?
@@ -268,7 +274,12 @@ export default class App extends Vue {
         : pixelateConcentrically();
       }
 
-      setInterval(go, 50);
+      const runLoop = () => {
+        go();
+        setTimeout(runLoop, this.options.display.tickMilliseconds);
+      }
+
+      setTimeout(runLoop, this.options.display.tickMilliseconds);
 
       webmidi.enable(ex => {
         if (ex != undefined) {
