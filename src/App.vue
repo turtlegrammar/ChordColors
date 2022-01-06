@@ -97,6 +97,7 @@ export default class App extends Vue {
     const imageData = new ImageData(arr, width);
     return (rgbs: RGB[]) =>
     {
+      const loopTimeStart = performance.now();
       for (let i = 0; i < arr.length; i+=4)
       {
         const c = rgbs[Math.floor(Math.random()*rgbs.length)];
@@ -105,6 +106,8 @@ export default class App extends Vue {
         arr[i + 2] = c.blue;
         arr[i + 3] = 255;
       }
+      const loopTimeEnd = performance.now();
+      // console.log("loop time: " + (loopTimeEnd - loopTimeStart));
 
       ctx.putImageData(imageData, 0, 0);
     }
@@ -121,28 +124,36 @@ export default class App extends Vue {
     const imageData = new ImageData(arr, width);
     return (rgbs: RGB[][], emergent: RGB[], emergentBias: number) =>
     {
-      for (let j = 0; j < rgbs.length; j++)
+      if (rgbs.length == 1)
       {
-        let end = (j + 1) * totalElements / rgbs.length -1;
-        end = end - (end % 4);
-        let begin = j * totalElements / rgbs.length;
-        begin = begin - (begin % 4);
+        this.randomPixelator(rgbs[0]);
+        return;
+      }
+      const loopTimeStart = performance.now();
+      let multiplier = totalElements / rgbs.length - 1; multiplier -= (multiplier % 4);
+      const end = multiplier;
+      const begin = 0;
 
-        const midpoint = (end + begin) / 2;
-        const d = (end - begin) / 2;
-        const thisRgbs = rgbs[rgbs.length - j - 1];
+      const midpoint = (end + begin) / 2;
+      const d = (end - begin) / 2;
 
-        for (let i = begin; i < end; i+=4)
+      for (let i = 0; i < end; i+=4)
+      {
+        const useEmergence = Math.random() < (Math.abs(i - midpoint) / d) * emergentBias;
+        for (let j = 0; j < rgbs.length; j++)
         {
-          const c = Math.random() < (Math.abs(i - midpoint) / d) * emergentBias
-          ? emergent[Math.floor(Math.random()*emergent.length)]
-            : thisRgbs[Math.floor(Math.random()*thisRgbs.length)];
-          arr[i] = c.red;
-          arr[i + 1] = c.green;
-          arr[i + 2] = c.blue;
-          arr[i + 3] = 255;
+          const c = useEmergence ? 
+            emergent[Math.floor(Math.random()*emergent.length)]
+            : rgbs[rgbs.length - j - 1][Math.floor(Math.random()*rgbs[j].length)];
+            arr[j*multiplier + i] = c.red;
+            arr[j*multiplier + i + 1] = c.green;
+            arr[j*multiplier + i + 2] = c.blue;
+            arr[j*multiplier + i + 3] = 255;
         }
       }
+
+      const loopTimeEnd = performance.now();
+      // console.log("loop time: " + (loopTimeEnd - loopTimeStart));
 
       ctx.putImageData(imageData, 0, 0);
     }
@@ -188,7 +199,6 @@ export default class App extends Vue {
         else
         {
           const withOvertones = colors.map(c => colorOvertones(c, this.options.overtone).map(wc => wc.color));
-          console.log(withOvertones);
           withOvertones.push(flipMap(withOvertones, c => mixColors(this.options.mix, c)));
           const hexOvertones = deepMap(withOvertones, hslToHex);
           this.drawAll(ctx, hexOvertones, this.options.canvas);

@@ -33,7 +33,7 @@ export type Priorities = {
 }
 
 export const defaultOptions: Options = {
-    display: { waitBeforeClearMilliseconds: 100, tickMilliseconds: 50},
+    display: { waitBeforeClearMilliseconds: 100, tickMilliseconds: 5},
     circle: { tonic: "C", degreeOffset: 60 },
     viewMode: { single: false, overtoneGrid: false, randomPixelation: false, concentricPixelation: true },
     canvas: { width: 1800, height: 1190 },
