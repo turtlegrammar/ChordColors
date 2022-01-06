@@ -1,22 +1,13 @@
 <template>
-<v-app>
+<v-app v-bind:width="options.canvas.width" v-bind:height="options.canvas.height" class="ma-0 pa-0">
   <v-main>
     <v-container>
-      <!-- <v-row>
-        <v-col class="lg-4"></v-col>
-        <v-col class="lg-4"><v-btn @click="loadAll">Proceed Irreversibly</v-btn></v-col>
-        <v-col class="lg-4"></v-col>
-      </v-row> -->
       <v-row>
         <v-col class="lg-6"><options-editor v-model="options"></options-editor></v-col>
-        <!-- <v-col class="lg-6"><flashcardSelector :categories="categories" v-model="selectedFlashcardIds"></flashcardSelector></v-col> -->
-      </v-row>
-      <v-row>
-        <!-- <canvas id="canvas" width="1280" height="1280" style="border: 1px solid black;"></canvas> -->
-      <canvas id="canvas" v-bind:width="options.canvas.width" v-bind:height="options.canvas.height"></canvas>
       </v-row>
     </v-container>
   </v-main>
+  <canvas id="canvas" v-bind:width="options.canvas.width" v-bind:height="options.canvas.height"></canvas>
 </v-app>
 </template>
 <script lang="ts">
@@ -55,13 +46,25 @@ export default class App extends Vue {
 
   get concentricPixelator() {
     return this.ctx == undefined
-      ? (rgbs: RGB[][], emergent: RGB[], emergentBias: number) => {}
+      ? (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number) => {}
       : this.makeConcentricPixelator(this.ctx, this.options.canvas);
   }
   // this.randomPixelator = this.makeRandomPixelator(ctx, this.options.canvas);
 
   // this.concentricPixelator = this.makeConcentricPixelator(ctx, this.options.canvas);
-        
+
+  resize() {
+      this.options.canvas.width = window.innerWidth;
+      this.options.canvas.height = window.innerHeight;
+  }
+
+  created() {
+    window.addEventListener("resize", this.resize);
+  }
+  
+  destroyed() {
+    window.removeEventListener("resize", this.resize);
+  }
 
   drawAll(ctx: CanvasRenderingContext2D, colors: HexColor[][], dimensions: CanvasOptions)
   {
@@ -122,7 +125,7 @@ export default class App extends Vue {
     const totalElements = width * height * 4;
     const arr = new Uint8ClampedArray(width * height * 4);
     const imageData = new ImageData(arr, width);
-    return (rgbs: RGB[][], emergent: RGB[], emergentBias: number) =>
+    return (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number) =>
     {
       if (rgbs.length == 1)
       {
@@ -139,7 +142,7 @@ export default class App extends Vue {
 
       for (let i = 0; i < end; i+=4)
       {
-        const useEmergence = Math.random() < (Math.abs(i - midpoint) / d) * emergentBias;
+        const useEmergence = Math.random() - emergentBiasFloor < (Math.abs(i - midpoint) / d) * emergentBias;
         for (let j = 0; j < rgbs.length; j++)
         {
           const c = useEmergence ? 
@@ -161,6 +164,7 @@ export default class App extends Vue {
 
   mounted()
   {
+    this.resize();
       const canvas = document.getElementById("canvas") as HTMLCanvasElement;
       const ctx = canvas.getContext("2d")!;
       this.ctx = ctx;
@@ -273,7 +277,7 @@ export default class App extends Vue {
               emergentDrawingPool.push(rgb);
           });
 
-          this.concentricPixelator(drawingPool, emergentDrawingPool, this.options.render.emergentBias);
+          this.concentricPixelator(drawingPool, emergentDrawingPool, this.options.render.emergentBias, this.options.render.emergentBiasFloor);
         }
       }
 
@@ -306,6 +310,15 @@ export default class App extends Vue {
         }
     
         const input = webmidi.inputs[0];
+        input.addListener("midimessage", "all", e =>  { 
+          if (e.data[1] == 64)
+          {
+            if (e.data[2] <= 63)
+              this.midiBatcher.endSustain();
+            else
+              this.midiBatcher.beginSustain();
+          }
+        });
         input.addListener("noteon", "all", e => {
           this.midiBatcher.handleNoteOn(
             midiToScientific(e.note.number, e.note.octave),

@@ -5,7 +5,7 @@ export type ViewMode = { single: boolean; overtoneGrid: boolean; randomPixelatio
 export type DisplayConfig = { tickMilliseconds: number; waitBeforeClearMilliseconds: number; }
 export type CircleConfig = { tonic: PitchClass; degreeOffset: number }
 export type MixBias = { rootBias: number; melodyBias: number; }
-export type RenderBias = { rootBias: number; middleBias: number; melodyBias: number; emergentBias: number }
+export type RenderBias = { rootBias: number; middleBias: number; melodyBias: number; emergentBias: number; emergentBiasFloor: number; }
 export type OvertoneConfig = { numberOvertones: number; backoffCoefficient: number; }
 
 export type CanvasOptions = { width: number; height: number; }
@@ -38,6 +38,6 @@ export const defaultOptions: Options = {
     viewMode: { single: false, overtoneGrid: false, randomPixelation: false, concentricPixelation: true },
     canvas: { width: 1800, height: 1190 },
     mix: { rootBias: 1.5, melodyBias: 1.5 },
-    render: { rootBias: 1, middleBias: 1, melodyBias: 1, emergentBias: 1 },
+    render: { rootBias: 1, middleBias: 1, melodyBias: 1, emergentBias: 1 , emergentBiasFloor: 0.2},
     overtone: { numberOvertones: 7, backoffCoefficient: 1.5 }
 };
