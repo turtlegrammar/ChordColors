@@ -16,10 +16,12 @@ export class MidiBatcher {
     endSustain()
     {
         this._sustainOn = false;
+        const newNotes = new Map<string, PlayedNote>();
         this._notes.forEach((n, k) => {
-            if (n.sustained)
-            this._notes.delete(k)
+            if (!n.sustained)
+                newNotes.set(k, n);
         });
+        this._notes = newNotes;
     }
 
     beginSustain()
