@@ -100,7 +100,7 @@ export function notesToColors(config: CircleConfig, notes: PlayedNote[]): HSL[] 
             // between 0, 100 -- a percentage
             return {
                 hue: Math.abs((360 - fifths.get(pn.note.class)! + config.degreeOffset + fifths.get(config.tonic)!)) % 360,
-                saturation: 100 * (0.7 + 0.3 * pn.velocity), // todo: configurable saturation floor,
+                saturation: config.saturationFloor + (100 - config.saturationFloor) * pn.velocity, // todo: configurable saturation floor,
                 light: (NoteToMidi(pn.note) - 21) * (100 / 88.0)
             };
         });

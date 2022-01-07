@@ -15,12 +15,14 @@ import { Component, Vue, Watch } from "vue-property-decorator";
 import OptionsEditor from "./components/OptionsEditor.vue";
 import { VBtn, VContainer, VRow, VCol, VTabs, VApp, VMain, VTabItem, VTab } from "vuetify/lib";
 
-import { Options, defaultOptions, CanvasOptions } from './domain/models/options';
+import { Options, defaultOptions, CanvasOptions, OvertoneConfig, WheelViewModeConfig } from './domain/models/options';
 import { Note, NoteToMidi, scientificNote, Octave, PitchClass, midiToScientific } from "./domain/models/notes";
 import { MidiBatcher } from "./domain/services/midiBatcher";
 import { HSL, RGB, notesToColors, hslToHex, mixColors, HexColor, colorOvertones, hslToRgb, normalizeWeights } from "./domain/services/colorGiver";
 import { indexBy, deepMap, flipMap, drawRandom } from "./domain/util/util";
 import webmidi, { WebMidi } from "webmidi";
+
+type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: WheelViewModeConfig) => void;
 
 @Component ({
   components: {
@@ -31,6 +33,7 @@ import webmidi, { WebMidi } from "webmidi";
     VBtn
   }
 })
+
 export default class App extends Vue {
 
   private options: Options = defaultOptions;
@@ -38,24 +41,18 @@ export default class App extends Vue {
   // private randomPixelator: (rgbs: RGB[]) => void = (x) => {}
   private ctx: (CanvasRenderingContext2D | undefined) = undefined;
 
-  get randomPixelator() {
-    return this.ctx == undefined
-      ? (_: RGB[]) => {} 
-      : this.makeRandomPixelator(this.ctx, this.options.canvas);
-  }
+  private randomPixelator = (_: RGB[]) => {};
 
-  get concentricPixelator() {
-    return this.ctx == undefined
-      ? (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number) => {}
-      : this.makeConcentricPixelator(this.ctx, this.options.canvas);
-  }
-  // this.randomPixelator = this.makeRandomPixelator(ctx, this.options.canvas);
+  private concentricPixelator = (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number) => {};
 
-  // this.concentricPixelator = this.makeConcentricPixelator(ctx, this.options.canvas);
+  private wheelDrawer: ColorWheelDrawer = (hsls: HSL[][], c: WheelViewModeConfig) => {} 
 
   resize() {
       this.options.canvas.width = window.innerWidth;
       this.options.canvas.height = window.innerHeight;
+      this.randomPixelator = this.makeRandomPixelator(this.ctx!, this.options.canvas);
+      this.concentricPixelator = this.makeConcentricPixelator(this.ctx!, this.options.canvas);
+      this.wheelDrawer = this.makeColorWheelDrawer(this.ctx!, this.options.canvas);
   }
 
   created() {
@@ -86,6 +83,80 @@ export default class App extends Vue {
         ctx.fillStyle = thisColor;
         ctx.rect(c * colSize, r * rowSize, colSize, rowSize);
         ctx.fill();
+      }
+    }
+  }
+
+  makeColorWheelDrawer(ctx: CanvasRenderingContext2D, dimensions: CanvasOptions): ColorWheelDrawer
+  {
+    const width = dimensions.width;
+    const height = dimensions.height;
+
+    const arr = new Uint8ClampedArray(width * height * 4);
+    const imageData = new ImageData(arr, width);
+
+    let arrayInitialized = false;
+
+    return (hsls: HSL[][], config: WheelViewModeConfig) =>
+    {
+      const radius = Math.min(width, height) / 2;
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      if (!arrayInitialized)
+      {
+        const l = width * height;
+        for (let i = 0; i < l; i+=1)
+        {
+          const y = Math.floor(i / width);
+          const x = Math.floor(i - y * width);
+          const dist = Math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY));
+          if (dist < radius)
+          {
+            const theta = (Math.atan2(y - centerY, x - centerX) * (180/ Math.PI) + 360 + 90) % 360;
+            const hsl = { hue: theta, saturation: 100, light: 100 * dist / radius }
+            const rgb = hslToRgb(hsl);
+            arr[i*4] = rgb.red;
+            arr[i*4 + 1] = rgb.green;
+            arr[i*4 + 2] = rgb.blue;
+            arr[i*4 + 3] = 255;
+          }
+        }
+        arrayInitialized = true;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      for (let j = 0; j < hsls.length; j++)
+      {
+        if (config.showEmergentOnly && j != hsls.length - 1)
+          continue;
+
+        if (!config.showEmergence && j == hsls.length - 1)
+          continue;
+
+        const hslWithOvertones = hsls[j];
+
+        for (let i = 0; i < hslWithOvertones.length; i++)
+        {
+          if (!config.showOvertones && i > 0)
+            continue;
+
+          const hsl = hslWithOvertones[i];
+
+          const spotlightSize = Math.floor(radius * config.spotlightScaleFactor  / (i + 1));
+          const theta = (hsl.hue - 90) * Math.PI / 180;
+          const magnitude = hsl.light * radius / 100;
+          const x = magnitude * Math.cos(theta);
+          const y = magnitude * Math.sin(theta);
+          ctx.lineWidth = config.lineWidth;
+          ctx.beginPath();
+          ctx.arc(x + centerX, y + centerY, spotlightSize, 0, Math.PI * 2);
+          ctx.strokeStyle = hslToHex({hue: (hsl.hue + 180) % 360, saturation: 100, light: 100 - hsl.light});
+          ctx.fillStyle = hslToHex(hsl);
+          ctx.stroke();
+          ctx.fill();
+        }
       }
     }
   }
@@ -164,10 +235,11 @@ export default class App extends Vue {
 
   mounted()
   {
+    const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d")!;
+    this.ctx = ctx;
+
     this.resize();
-      const canvas = document.getElementById("canvas") as HTMLCanvasElement;
-      const ctx = canvas.getContext("2d")!;
-      this.ctx = ctx;
 
       let noNotesForMs = 0;
       const tryClear = () => {
@@ -255,7 +327,7 @@ export default class App extends Vue {
           // first, weight with overtones, then weight with root/middle/etc. etc.?
           const cs = [... rawColors];
           const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
-          const emergent = colorOvertones(mixColors(this.options.mix, cs), this.options.overtone);
+          const emergent = cs.length > 0 ? colorOvertones(mixColors(this.options.mix, cs), this.options.overtone) : [];
 
           const drawingPool: RGB[][] = [];
           withOvertones.forEach(wcs => {
@@ -281,9 +353,21 @@ export default class App extends Vue {
         }
       }
 
+      const renderColorWheel = () =>
+      {
+        const rawColors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
+        const cs = [... rawColors];
+        const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
+        const emergent = colorOvertones(mixColors(this.options.mix, cs), this.options.overtone);
+        withOvertones.push(emergent);
+
+        this.wheelDrawer(deepMap(withOvertones, wc => wc.color), this.options.wheelViewModeConfig);
+      }
+
       const go = () => {
         this.options.viewMode.single ? renderSingleColor()
         : this.options.viewMode.overtoneGrid ? renderOvertonesGrid()
+        : this.options.viewMode.wheel ? renderColorWheel()
         : this.options.viewMode.randomPixelation ? pixelateRandomly()
         : pixelateConcentrically();
       }
@@ -311,7 +395,6 @@ export default class App extends Vue {
     
         const input = webmidi.inputs[0];
         input.addListener("midimessage", "all", e =>  { 
-          console.log(e);
           if (e.data[0] >> 4 == 11 && e.data[1] == 64)
           {
             if (e.data[2] <= 63)
