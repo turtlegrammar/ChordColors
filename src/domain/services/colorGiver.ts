@@ -13,10 +13,17 @@ export type HSL = {
     light: number; // [0, 100], float
 }
 
-export type RGB = {
+export interface RGB {
     red: number;
     green: number;
     blue: number;
+}
+
+export interface RGBA {
+    red: number;
+    green: number;
+    blue: number;
+    alpha: number;
 }
 
 export type HexColor = string;
