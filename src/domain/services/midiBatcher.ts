@@ -1,4 +1,4 @@
-import { MidiNote, Note, NoteToMidi, ScientificNote } from "../models/notes";
+import { MidiNote, midiToScientific, Note, NoteToMidi, ScientificNote } from "../models/notes";
 
 export type PlayedNote = {
     velocity: number;
@@ -6,10 +6,11 @@ export type PlayedNote = {
     sustained: boolean;
     timeFirstPresseddMilliseconds: number;
     ageMilliseconds: number;
+    midiNote: MidiNote;
 }
 
 export class MidiBatcher {
-    private _notes: Map<string, PlayedNote> = new Map<string, PlayedNote>();;
+    private _notes: Map<MidiNote, PlayedNote> = new Map<MidiNote, PlayedNote>();;
     private _sustainOn = false;
 
     constructor() { }
@@ -17,7 +18,7 @@ export class MidiBatcher {
     endSustain()
     {
         this._sustainOn = false;
-        const newNotes = new Map<string, PlayedNote>();
+        const newNotes = new Map<MidiNote, PlayedNote>();
         this._notes.forEach((n, k) => {
             if (!n.sustained)
                 newNotes.set(k, n);
@@ -30,27 +31,24 @@ export class MidiBatcher {
         this._sustainOn = true;
     }
 
-    private static key(note: ScientificNote): string
+    handleNoteOn(note: MidiNote, octave: number, velocity: number): void
     {
-        return note.class + note.octave;
+        
+        this._notes.set(note, {velocity: velocity, note: midiToScientific(note, octave), midiNote: note,
+            sustained: false, timeFirstPresseddMilliseconds: performance.now(), ageMilliseconds: 0});
     }
 
-    handleNoteOn(note: ScientificNote, velocity: number): void
-    {
-        this._notes.set(MidiBatcher.key(note), {velocity: velocity, note: note, sustained: false, timeFirstPresseddMilliseconds: performance.now(), ageMilliseconds: 0});
-    }
-
-    handleNoteOff(note: ScientificNote): void
+    handleNoteOff(note: MidiNote): void
     {
         if (this._sustainOn)
         {
-            const n = this._notes.get(MidiBatcher.key(note));
+            const n = this._notes.get(note);
             if (n != undefined)
                 n.sustained = true;
         }
         else
         {
-            this._notes.delete(MidiBatcher.key(note));
+            this._notes.delete(note);
         }
     }
 

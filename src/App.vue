@@ -354,17 +354,11 @@ export default class App extends Vue {
           }
         });
         input.addListener("noteon", "all", e => {
-          this.midiBatcher.handleNoteOn(
-            midiToScientific(e.note.number, e.note.octave),
-            e.velocity
-          );
-          // render();
+          this.midiBatcher.handleNoteOn(e.note.number, e.note.octave, e.velocity);
         });
     
         input.addListener("noteoff", "all", e => {
-          this.midiBatcher.handleNoteOff(
-            midiToScientific(e.note.number, e.note.octave)
-          );
+          this.midiBatcher.handleNoteOff(e.note.number)
         });
       }, true);
   }
