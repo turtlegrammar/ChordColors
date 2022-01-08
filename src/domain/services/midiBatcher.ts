@@ -3,8 +3,9 @@ import { MidiNote, Note, NoteToMidi, ScientificNote } from "../models/notes";
 export type PlayedNote = {
     velocity: number;
     note: ScientificNote;
-    lifespan: number;
     sustained: boolean;
+    timeFirstPresseddMilliseconds: number;
+    ageMilliseconds: number;
 }
 
 export class MidiBatcher {
@@ -36,7 +37,7 @@ export class MidiBatcher {
 
     handleNoteOn(note: ScientificNote, velocity: number): void
     {
-        this._notes.set(MidiBatcher.key(note), {velocity: velocity, note: note, lifespan: 0, sustained: false});
+        this._notes.set(MidiBatcher.key(note), {velocity: velocity, note: note, sustained: false, timeFirstPresseddMilliseconds: performance.now(), ageMilliseconds: 0});
     }
 
     handleNoteOff(note: ScientificNote): void
@@ -60,8 +61,9 @@ export class MidiBatcher {
         return notes;
     }
 
-    tick(ms: number): void
+    tick(): void
     {
-        this._notes.forEach(n => n.lifespan = n.lifespan + ms);
+        const now = performance.now();
+        this._notes.forEach(n => n.ageMilliseconds = now - n.timeFirstPresseddMilliseconds);
     }
 }

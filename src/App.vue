@@ -21,6 +21,7 @@ import { MidiBatcher } from "./domain/services/midiBatcher";
 import { HSL, RGB, notesToColors, hslToHex, mixColors, HexColor, colorOvertones, hslToRgb, normalizeWeights } from "./domain/services/colorGiver";
 import { indexBy, deepMap, flipMap, drawRandom } from "./domain/util/util";
 import webmidi, { WebMidi } from "webmidi";
+import { RandomPixelator, makeRandomPixelator, RandomPixelatorConfig, doNothingRandomPixelator, makeRandomPixelatorConfig } from "./drawers/RandomPixelator"
 
 type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: WheelViewModeConfig) => void;
 
@@ -41,16 +42,16 @@ export default class App extends Vue {
   // private randomPixelator: (rgbs: RGB[]) => void = (x) => {}
   private ctx: (CanvasRenderingContext2D | undefined) = undefined;
 
-  private randomPixelator = (_: RGB[]) => {};
+  private randomPixelator: RandomPixelator = doNothingRandomPixelator;
 
-  private concentricPixelator = (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number) => {};
+  private concentricPixelator = (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number, vs: number[] | undefined) => {};
 
   private wheelDrawer: ColorWheelDrawer = (hsls: HSL[][], c: WheelViewModeConfig) => {} 
 
   resize() {
       this.options.canvas.width = window.innerWidth;
       this.options.canvas.height = window.innerHeight;
-      this.randomPixelator = this.makeRandomPixelator(this.ctx!, this.options.canvas);
+      this.randomPixelator = makeRandomPixelator(this.ctx!, this.options.canvas);
       this.concentricPixelator = this.makeConcentricPixelator(this.ctx!, this.options.canvas);
       this.wheelDrawer = this.makeColorWheelDrawer(this.ctx!, this.options.canvas);
   }
@@ -161,32 +162,6 @@ export default class App extends Vue {
     }
   }
 
-  // todo: regenerate instance on size change
-  makeRandomPixelator(ctx: CanvasRenderingContext2D, dimensions: CanvasOptions): ((rgbs: RGB[]) => void)
-  {
-    const width = dimensions.width;
-    const height = dimensions.height;
-
-    const arr = new Uint8ClampedArray(width * height * 4);
-    const imageData = new ImageData(arr, width);
-    return (rgbs: RGB[]) =>
-    {
-      const loopTimeStart = performance.now();
-      for (let i = 0; i < arr.length; i+=4)
-      {
-        const c = rgbs[Math.floor(Math.random()*rgbs.length)];
-        arr[i] = c.red;
-        arr[i + 1] = c.green;
-        arr[i + 2] = c.blue;
-        arr[i + 3] = 255;
-      }
-      const loopTimeEnd = performance.now();
-      // console.log("loop time: " + (loopTimeEnd - loopTimeStart));
-
-      ctx.putImageData(imageData, 0, 0);
-    }
-  }
-
 // todo: resize
   makeConcentricPixelator(ctx: CanvasRenderingContext2D, dimensions: CanvasOptions)
   {
@@ -196,15 +171,17 @@ export default class App extends Vue {
     const totalElements = width * height * 4;
     const arr = new Uint8ClampedArray(width * height * 4);
     const imageData = new ImageData(arr, width);
-    return (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number) =>
+    return (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number, 
+      velocities: number[] | undefined) =>
     {
-      if (rgbs.length == 1)
-      {
-        this.randomPixelator(rgbs[0]);
-        return;
-      }
+      // if (rgbs.length == 1)
+      // {
+      //   this.randomPixelator(rgbs[0]);
+      //   return;
+      // }
       const loopTimeStart = performance.now();
       let multiplier = totalElements / rgbs.length - 1; multiplier -= (multiplier % 4);
+      multiplier = Math.min(multiplier, totalElements);
       const end = multiplier;
       const begin = 0;
 
@@ -213,11 +190,12 @@ export default class App extends Vue {
 
       for (let i = 0; i < end; i+=4)
       {
-        const useEmergence = Math.random() - emergentBiasFloor < (Math.abs(i - midpoint) / d) * emergentBias;
+        const useEmergentCeiling = (Math.abs(i - midpoint) / d) * emergentBias;
+        const useEmergenceBase =  Math.random() - emergentBiasFloor;
         for (let j = 0; j < rgbs.length; j++)
         {
-          const c = useEmergence ? 
-            emergent[Math.floor(Math.random()*emergent.length)]
+          const c = useEmergenceBase < useEmergentCeiling
+            ? emergent[Math.floor(Math.random()*emergent.length)]
             : rgbs[rgbs.length - j - 1][Math.floor(Math.random()*rgbs[j].length)];
             arr[j*multiplier + i] = c.red;
             arr[j*multiplier + i + 1] = c.green;
@@ -265,7 +243,6 @@ export default class App extends Vue {
           ctx.fillStyle = hslToHex(color);
           ctx.fill();
         }
-        this.midiBatcher.tick(50);
     };
 
       const renderOvertonesGrid = () => {
@@ -283,45 +260,10 @@ export default class App extends Vue {
         }
       }
 
-      const pixelateRandomly = () => {
-        const notes = this.midiBatcher.getNotes();
-        const rawColors = notesToColors(this.options.circle, notes);
-        if (rawColors.length == 0)
-          tryClear();
-        
-        else
-        {
-          // first, weight with overtones, then weight with root/middle/etc. etc.?
-          const cs = [... rawColors];
-          if (cs.length > 1)
-            cs.push(mixColors(this.options.mix, cs, notes.map(n => n.velocity)));
-          const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
-          for (let i = 0; i < withOvertones.length; i++)
-          {
-            if (i == 0)
-              withOvertones[i].forEach(wc => wc.weight *= this.options.render.rootBias);
-            else if (i == withOvertones.length - 1)
-              withOvertones[i].forEach(wc => wc.weight *= this.options.render.emergentBias);
-            else if (i == withOvertones.length - 2)
-              withOvertones[i].forEach(wc => wc.weight *= this.options.render.melodyBias);
-            else 
-              withOvertones[i].forEach(wc => wc.weight *= this.options.render.middleBias);
-          }
-          const flatColors = withOvertones.flat();
-          normalizeWeights(flatColors);
-          const drawingPool: RGB[] = [];
-          flatColors.forEach(wc => {
-            const rgb = hslToRgb(wc.color);
-            for (let i = 0; i < Math.floor(10000 * wc.weight); i++)
-              drawingPool.push(rgb);
-          })
-
-          this.randomPixelator(drawingPool);
-        }
-      }
 
       const pixelateConcentrically = () => {
         const notes = this.midiBatcher.getNotes();
+        const velocities = notes.map(n => n.velocity);
         const rawColors = notesToColors(this.options.circle, notes);
         if (rawColors.length == 0)
           tryClear();
@@ -331,7 +273,7 @@ export default class App extends Vue {
           // first, weight with overtones, then weight with root/middle/etc. etc.?
           const cs = [... rawColors];
           const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
-          const emergent = cs.length > 0 ? colorOvertones(mixColors(this.options.mix, cs, notes.map(n => n.velocity)), this.options.overtone) : [];
+          const emergent = cs.length > 0 ? colorOvertones(mixColors(this.options.mix, cs, velocities), this.options.overtone) : [];
 
           const drawingPool: RGB[][] = [];
           withOvertones.forEach(wcs => {
@@ -353,7 +295,9 @@ export default class App extends Vue {
               emergentDrawingPool.push(rgb);
           });
 
-          this.concentricPixelator(drawingPool, emergentDrawingPool, this.options.render.emergentBias, this.options.render.emergentBiasFloor);
+          this.concentricPixelator(drawingPool, emergentDrawingPool, 
+            this.options.render.emergentBias, this.options.render.emergentBiasFloor,
+            this.options.mix.considerVelocity ? velocities : undefined);
         }
       }
 
@@ -370,10 +314,11 @@ export default class App extends Vue {
       }
 
       const go = () => {
+        this.midiBatcher.tick();
         this.options.viewMode.single ? renderSingleColor()
         : this.options.viewMode.overtoneGrid ? renderOvertonesGrid()
         : this.options.viewMode.wheel ? renderColorWheel()
-        : this.options.viewMode.randomPixelation ? pixelateRandomly()
+        : this.options.viewMode.randomPixelation ? this.randomPixelator(this.midiBatcher, makeRandomPixelatorConfig(this.options), tryClear)
         : pixelateConcentrically();
       }
 
