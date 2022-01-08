@@ -23,7 +23,7 @@ import { indexBy, deepMap, flipMap, drawRandom } from "./domain/util/util";
 import webmidi, { WebMidi } from "webmidi";
 import { RandomPixelator, makeRandomPixelator, RandomPixelatorConfig, doNothingRandomPixelator, makeRandomPixelatorConfig } from "./drawers/RandomPixelator"
 
-type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: WheelViewModeConfig) => void;
+type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: WheelViewModeConfig, degreeOffset: number) => void;
 
 @Component ({
   components: {
@@ -98,7 +98,7 @@ export default class App extends Vue {
 
     let arrayInitialized = false;
 
-    return (hsls: HSL[][], config: WheelViewModeConfig) =>
+    return (hsls: HSL[][], config: WheelViewModeConfig, degreeOffset: number) =>
     {
       const radius = Math.min(width, height) / 2;
       const centerX = width / 2;
@@ -115,7 +115,7 @@ export default class App extends Vue {
           if (dist < radius)
           {
             const theta = (Math.atan2(y - centerY, x - centerX) * (180/ Math.PI) + 360 + 90) % 360;
-            const hsl = { hue: theta, saturation: 100, light: 100 * dist / radius }
+            const hsl = { hue: (360 - theta + degreeOffset) % 360, saturation: 100, light: 100 * dist / radius }
             const rgb = hslToRgb(hsl);
             arr[i*4] = rgb.red;
             arr[i*4 + 1] = rgb.green;
@@ -146,7 +146,8 @@ export default class App extends Vue {
           const hsl = hslWithOvertones[i];
 
           const spotlightSize = Math.floor(radius * config.spotlightScaleFactor  / (i + 1));
-          const theta = (hsl.hue - 90) * Math.PI / 180;
+          // const theta = 360 - ((hsl.hue - 90) * Math.PI / 180) % 360;
+          const theta = ((360 - hsl.hue - 90 + degreeOffset) % 360) * Math.PI / 180;
           const magnitude = hsl.light * radius / 100;
           const x = magnitude * Math.cos(theta);
           const y = magnitude * Math.sin(theta);
@@ -310,7 +311,7 @@ export default class App extends Vue {
         const emergent = colorOvertones(mixColors(this.options.mix, cs, notes.map(n => n.velocity)), this.options.overtone);
         withOvertones.push(emergent);
 
-        this.wheelDrawer(deepMap(withOvertones, wc => wc.color), this.options.wheelViewModeConfig);
+        this.wheelDrawer(deepMap(withOvertones, wc => wc.color), this.options.wheelViewModeConfig, this.options.circle.degreeOffset);
       }
 
       const go = () => {
@@ -344,7 +345,7 @@ export default class App extends Vue {
         }
     
         const input = webmidi.inputs[0];
-        input.addListener("midimessage", "all", e =>  { 
+        input.addListener("midimessage", "all", e =>  {
           if (e.data[0] >> 4 == 11 && e.data[1] == 64)
           {
             if (e.data[2] <= 63)

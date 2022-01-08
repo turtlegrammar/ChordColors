@@ -33,7 +33,7 @@ export type Options = {
 export const defaultOptions: Options = {
     display: { waitBeforeClearMilliseconds: 100, tickMilliseconds: 5},
     circle: { tonic: "C", degreeOffset: 60, saturationFloor: 100 },
-    viewMode: { single: false, overtoneGrid: false, wheel: false, randomPixelation: false, concentricPixelation: true },
+    viewMode: { single: false, overtoneGrid: false, wheel: true, randomPixelation: false, concentricPixelation: true },
     wheelViewModeConfig: { showOvertones : false, showEmergence: false, showEmergentOnly: false, lineWidth: 3, spotlightScaleFactor: 0.05},
     canvas: { width: 1800, height: 1190 },
     mix: { rootBias: 1.5, melodyBias: 1.5, considerVelocity: true },
