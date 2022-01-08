@@ -252,37 +252,40 @@ export default class App extends Vue {
       }
 
       const renderSingleColor = () => {
-          const colors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
-          if (colors.length == 0)
-            tryClear();
-          
-          else
-          {
-            const color = mixColors(this.options.mix, colors);
-            ctx.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
-            ctx.rect(0, 0, this.options.canvas.width, this.options.canvas.height);
-            ctx.fillStyle = hslToHex(color);
-            ctx.fill();
-          }
-          this.midiBatcher.tick(50);
-      };
+        const notes = this.midiBatcher.getNotes();
+        const colors = notesToColors(this.options.circle, notes);
+        if (colors.length == 0)
+          tryClear();
+        
+        else
+        {
+          const color = mixColors(this.options.mix, colors, notes.map(n => n.velocity));
+          ctx.clearRect(0, 0, this.options.canvas.width, this.options.canvas.height);
+          ctx.rect(0, 0, this.options.canvas.width, this.options.canvas.height);
+          ctx.fillStyle = hslToHex(color);
+          ctx.fill();
+        }
+        this.midiBatcher.tick(50);
+    };
 
       const renderOvertonesGrid = () => {
-        const colors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
+        const notes = this.midiBatcher.getNotes();
+        const colors = notesToColors(this.options.circle, notes);
         if (colors.length == 0)
           tryClear();
 
         else
         {
           const withOvertones = colors.map(c => colorOvertones(c, this.options.overtone).map(wc => wc.color));
-          withOvertones.push(flipMap(withOvertones, c => mixColors(this.options.mix, c)));
+          withOvertones.push(flipMap(withOvertones, c => mixColors(this.options.mix, c, notes.map(n => n.velocity))));
           const hexOvertones = deepMap(withOvertones, hslToHex);
           this.drawAll(ctx, hexOvertones, this.options.canvas);
         }
       }
 
       const pixelateRandomly = () => {
-        const rawColors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
+        const notes = this.midiBatcher.getNotes();
+        const rawColors = notesToColors(this.options.circle, notes);
         if (rawColors.length == 0)
           tryClear();
         
@@ -291,7 +294,7 @@ export default class App extends Vue {
           // first, weight with overtones, then weight with root/middle/etc. etc.?
           const cs = [... rawColors];
           if (cs.length > 1)
-            cs.push(mixColors(this.options.mix, cs));
+            cs.push(mixColors(this.options.mix, cs, notes.map(n => n.velocity)));
           const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
           for (let i = 0; i < withOvertones.length; i++)
           {
@@ -318,7 +321,8 @@ export default class App extends Vue {
       }
 
       const pixelateConcentrically = () => {
-        const rawColors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
+        const notes = this.midiBatcher.getNotes();
+        const rawColors = notesToColors(this.options.circle, notes);
         if (rawColors.length == 0)
           tryClear();
         
@@ -327,7 +331,7 @@ export default class App extends Vue {
           // first, weight with overtones, then weight with root/middle/etc. etc.?
           const cs = [... rawColors];
           const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
-          const emergent = cs.length > 0 ? colorOvertones(mixColors(this.options.mix, cs), this.options.overtone) : [];
+          const emergent = cs.length > 0 ? colorOvertones(mixColors(this.options.mix, cs, notes.map(n => n.velocity)), this.options.overtone) : [];
 
           const drawingPool: RGB[][] = [];
           withOvertones.forEach(wcs => {
@@ -355,10 +359,11 @@ export default class App extends Vue {
 
       const renderColorWheel = () =>
       {
-        const rawColors = notesToColors(this.options.circle, this.midiBatcher.getNotes());
+        const notes = this.midiBatcher.getNotes();
+        const rawColors = notesToColors(this.options.circle, notes);
         const cs = [... rawColors];
         const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
-        const emergent = colorOvertones(mixColors(this.options.mix, cs), this.options.overtone);
+        const emergent = colorOvertones(mixColors(this.options.mix, cs, notes.map(n => n.velocity)), this.options.overtone);
         withOvertones.push(emergent);
 
         this.wheelDrawer(deepMap(withOvertones, wc => wc.color), this.options.wheelViewModeConfig);

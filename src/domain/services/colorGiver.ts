@@ -125,21 +125,24 @@ function vectorToHsl(v: Vector): HSL {
     };
 }
 
-export function mixColors(biases: MixBias, colors: HSL[]): HSL {
+export function mixColors(biases: MixBias, colors: HSL[], velocities: number[]): HSL {
     if (colors.length == 1)
     {
         return colors[0];
     }
     const middleCount = colors.length - 2;
-    const totalDivider = biases.rootBias + biases.melodyBias + middleCount;
+    let totalDivider = 0;
 
     // todo: also weight by velocity?
     const v = { x: 0, y: 0, z: 0};
     for (let i = 0; i < colors.length; i++)
     {
-        const weight = i == 0 ? biases.rootBias
+        let weight = i == 0 ? biases.rootBias
             : i == colors.length - 1 ? biases.melodyBias
             : 1;
+        weight *= biases.considerVelocity ? velocities[i] : 1;
+        totalDivider += weight;
+
 
         const cv = hslToVector(colors[i]);
         v.x += cv.x * weight;
