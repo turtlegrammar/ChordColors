@@ -1,15 +1,15 @@
-import { Options, defaultOptions, CanvasOptions, OvertoneConfig, WheelViewModeConfig, CircleConfig, MixBias, RenderBias, DecayConfig } from '../domain/models/options';
+import { Options, defaultOptions, CanvasOptions, OvertoneConfig, WheelViewModeConfig, CircleConfig, MixBias, RenderBias, DecayConfig, ColorConfig } from '../domain/models/options';
 import { Note, NoteToMidi, scientificNote, Octave, PitchClass, midiToScientific } from "../domain/models/notes";
 import { MidiBatcher } from "../domain/services/midiBatcher";
-import { HSL, RGB, RGBA, notesToColors, hslToHex, mixColors, HexColor, colorOvertones, hslToRgb, normalizeWeights } from "../domain/services/colorGiver";
+import { HSL, RGB, RGBA, notesToColors, hslToHex, mixColors, HexColor, hslToRGB, colorOvertones, normalizeWeights } from "../domain/services/colorGiver";
 import { indexBy, deepMap, flipMap, drawRandom } from "../domain/util/util";
 
-export type RandomPixelatorConfig = {circleConfig: CircleConfig; mixConfig: MixBias; renderConfig: RenderBias; overtoneConfig: OvertoneConfig; decayConfig: DecayConfig }
+export type RandomPixelatorConfig = {circleConfig: CircleConfig; mixConfig: MixBias; renderConfig: RenderBias; overtoneConfig: OvertoneConfig; decayConfig: DecayConfig; colorConfig: ColorConfig }
 export type RandomPixelator = (midiBatcher: MidiBatcher,config: RandomPixelatorConfig, tryClear: (() => void)) => void
 export const doNothingRandomPixelator: RandomPixelator = (a, b, c) => {}
 
 export function makeRandomPixelatorConfig(config: Options): RandomPixelatorConfig {
-    return { circleConfig: config.circle, mixConfig: config.mix, renderConfig: config.render, overtoneConfig: config.overtone, decayConfig: config.decay }
+    return { circleConfig: config.circle, mixConfig: config.mix, renderConfig: config.render, overtoneConfig: config.overtone, decayConfig: config.decay, colorConfig: config.color }
 };
 
 export function makeRandomPixelator(ctx: CanvasRenderingContext2D, dimensions: CanvasOptions): RandomPixelator
@@ -47,7 +47,7 @@ export function makeRandomPixelator(ctx: CanvasRenderingContext2D, dimensions: C
 function generateRGBs(midiBatcher: MidiBatcher, config: RandomPixelatorConfig): RGBA[] {
     const notes = midiBatcher.getNotes();
     const velocities = notes.map(n => n.velocity);
-    const rawColors = notesToColors(config.circleConfig, notes);
+    const rawColors = notesToColors(config.circleConfig, config.colorConfig, notes);
     if (rawColors.length == 0)
         return [];
     else
@@ -72,7 +72,7 @@ function generateRGBs(midiBatcher: MidiBatcher, config: RandomPixelatorConfig): 
         normalizeWeights(flatColors);
         const drawingPool: RGBA[] = [];
         flatColors.forEach(wc => {
-            const rgb = {... hslToRgb(wc.color), alpha: 255};
+            const rgb = {... hslToRGB(wc.color), alpha: 255};
             for (let i = 0; i < Math.floor(10000 * wc.weight); i++)
                 drawingPool.push(rgb);
         });

@@ -5,7 +5,6 @@ module.exports = {
   },
   extends: [
     "plugin:vue/essential",
-    "eslint:recommended",
     "@vue/typescript/recommended",
     "@vue/prettier",
   ],
@@ -15,10 +14,6 @@ module.exports = {
   rules: {
     "no-console": process.env.NODE_ENV === "production" ? "warn" : "off",
     "no-debugger": process.env.NODE_ENV === "production" ? "warn" : "off",
-    "@typescript-eslint/member-delimiter-style": "off",
-    "@typescript-eslint/no-use-before-define": "off",
-    "@typescript-eslint/prefer-const": "off",
-    "@typescript-eslint/no-empty-function": "off",
     "prettier/prettier": "off"
   },
   overrides: [

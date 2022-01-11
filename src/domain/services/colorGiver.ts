@@ -1,16 +1,20 @@
 import { PitchClass, NoteToMidi, midiNote } from "../models/notes";
-import { MixBias, OvertoneConfig, CircleConfig } from "../models/options";
+import { MixBias, OvertoneConfig, CircleConfig, ColorConfig } from "../models/options";
 import { PlayedNote } from "./midiBatcher";
+import { okhsl_to_srgb, hsl_to_rgb, rgb_to_hex } from "../colorconversion"
 
 export type WeightedHSL = {
     weight: number; // between [0, 1], in a list of  WeightedHSL, they sum to 1.
     color: HSL;
 }
 
+export type HSLType = "standard" | "okhsl";
+
 export type HSL = {
     hue: number; // [0, 360], int
     saturation: number; // [0, 100], float
     light: number; // [0, 100], float
+    kind: HSLType;
 }
 
 export interface RGB {
@@ -28,6 +32,17 @@ export interface RGBA {
 
 export type HexColor = string;
 
+export function hslToRGB(color: HSL): RGB {
+    if (color.kind == "standard") {
+        return hslToRgbHelper(color);
+    } else if (color.kind == "okhsl") {
+        const r = okhsl_to_srgb(color.hue / 360, color.saturation / 100, color.light / 100);
+        return { red: r[0], green: r[1], blue: r[2]};
+    } else {
+        throw "";
+    }
+}
+
 /**
  * Converts an HSL color value to RGB. Conversion formula
  * adapted from http://en.wikipedia.org/wiki/HSL_color_space.
@@ -41,7 +56,7 @@ export type HexColor = string;
  * 
  * https://stackoverflow.com/a/9493060
  */
-export function hslToRgb(hsl: HSL): RGB {
+function hslToRgbHelper(hsl: HSL): RGB {
     const h = hsl.hue / 360.0;
     const l = hsl.light / 100.0;
     const s = hsl.saturation / 100.0;
@@ -72,14 +87,8 @@ export function hslToRgb(hsl: HSL): RGB {
 
 // https://stackoverflow.com/a/44134328
 export function hslToHex(hsl: HSL): HexColor {
-  const h = hsl.hue; const l = hsl.light / 100; const s = hsl.saturation;
-  const a = s * Math.min(l, 1 - l) / 100;
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');   // convert to Hex and prefix "0" if needed
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
+    const rgb = hslToRGB(hsl);
+    return rgb_to_hex(rgb.red, rgb.green, rgb.blue);
 }
 
 const fifths: Map<PitchClass, number> = new Map<PitchClass, number>(
@@ -101,14 +110,17 @@ const fifths: Map<PitchClass, number> = new Map<PitchClass, number>(
 
 // lifespanFactor:  lifespan is ms, this is multiplied by ms to get percentage discount.
 // for -5% every second, do 0.05/1000
-export function notesToColors(config: CircleConfig, notes: PlayedNote[]): HSL[] {
+export function notesToColors(config: CircleConfig, colorConfig: ColorConfig, notes: PlayedNote[]): HSL[] {
+    const kind: HSLType = colorConfig.okHSL ? "okhsl" : "standard";
     return notes.map(pn =>
         {
+            const noteNumber = NoteToMidi(pn.note) - 21;
             // between 0, 100 -- a percentage
             return {
                 hue: Math.abs((360 - fifths.get(pn.note.class)! + config.degreeOffset + fifths.get(config.tonic)!)) % 360,
-                saturation: config.saturationFloor + (100 - config.saturationFloor) * pn.velocity, // todo: configurable saturation floor,
-                light: (NoteToMidi(pn.note) - 21) * (100 / 88.0)
+                saturation: (88 - noteNumber) * ((colorConfig.saturationCeiling - colorConfig.saturationFloor) / 88) + colorConfig.saturationFloor, // * pn.velocity, 
+                light: noteNumber * ((colorConfig.lightCeiling - colorConfig.lightFloor) / 88.0) + colorConfig.lightFloor,
+                kind: kind
             };
         });
 }
@@ -123,12 +135,13 @@ function hslToVector(hsl: HSL): Vector {
     };
 }
 
-function vectorToHsl(v: Vector): HSL {
+function vectorToHsl(v: Vector, type: HSLType): HSL {
     const h = Math.atan2(v.y, v.x) * 180 / Math.PI;
     return {
         hue: h < 0 ? 360 + h : h,
         saturation : Math.sqrt(v.x * v.x + v.y * v.y),
-        light: v.z
+        light: v.z,
+        kind: type
     };
 }
 
@@ -161,11 +174,11 @@ export function mixColors(biases: MixBias, colors: HSL[], velocities: number[]):
     v.y /= totalDivider;
     v.z /= totalDivider;
 
-    return vectorToHsl(v);
+    return vectorToHsl(v, colors[0].kind);
 }
 
 export function colorOvertones(color: HSL, config: OvertoneConfig): WeightedHSL[] {
-    const make = (h: number, l: number) => ({hue: h, light: l, saturation: color.saturation});
+    const make = (h: number, l: number) => ({hue: h, light: l, saturation: color.saturation, kind: color.kind});
     const lighten = (semitones: number) => Math.min(100, (100/88) * semitones + color.light);
 
     let counter = 1;

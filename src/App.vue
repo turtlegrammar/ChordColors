@@ -18,12 +18,12 @@ import { VBtn, VContainer, VRow, VCol, VTabs, VApp, VMain, VTabItem, VTab } from
 import { Options, defaultOptions, CanvasOptions, OvertoneConfig, WheelViewModeConfig } from './domain/models/options';
 import { Note, NoteToMidi, scientificNote, Octave, PitchClass, midiToScientific } from "./domain/models/notes";
 import { MidiBatcher } from "./domain/services/midiBatcher";
-import { HSL, RGB, notesToColors, hslToHex, mixColors, HexColor, colorOvertones, hslToRgb, normalizeWeights } from "./domain/services/colorGiver";
+import { HSL, RGB, notesToColors, hslToHex, mixColors, HexColor, colorOvertones, hslToRGB, normalizeWeights, HSLType } from "./domain/services/colorGiver";
 import { indexBy, deepMap, flipMap, drawRandom } from "./domain/util/util";
 import webmidi, { WebMidi } from "webmidi";
 import { RandomPixelator, makeRandomPixelator, RandomPixelatorConfig, doNothingRandomPixelator, makeRandomPixelatorConfig } from "./drawers/RandomPixelator"
 
-type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: WheelViewModeConfig, degreeOffset: number) => void;
+type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: Options, degreeOffset: number) => void;
 
 @Component ({
   components: {
@@ -46,7 +46,7 @@ export default class App extends Vue {
 
   private concentricPixelator = (rgbs: RGB[][], emergent: RGB[], emergentBias: number, emergentBiasFloor: number, vs: number[] | undefined) => {};
 
-  private wheelDrawer: ColorWheelDrawer = (hsls: HSL[][], c: WheelViewModeConfig) => {} 
+  private wheelDrawer: ColorWheelDrawer = (hsls: HSL[][], c: Options) => {} 
 
   resize() {
       this.options.canvas.width = window.innerWidth;
@@ -97,14 +97,17 @@ export default class App extends Vue {
     const imageData = new ImageData(arr, width);
 
     let arrayInitialized = false;
+    let arrayInitializedWithKind: HSLType | undefined = undefined;
 
-    return (hsls: HSL[][], config: WheelViewModeConfig, degreeOffset: number) =>
+    return (hsls: HSL[][], allConfig: Options, degreeOffset: number) =>
     {
+      const config = allConfig.wheelViewModeConfig;
+      const hslKind: HSLType = allConfig.color.standardHSL ? "standard": "okhsl";
       const radius = Math.min(width, height) / 2;
       const centerX = width / 2;
       const centerY = height / 2;
 
-      if (!arrayInitialized)
+      if (!arrayInitialized || (arrayInitializedWithKind !== undefined && arrayInitializedWithKind !== hslKind))
       {
         const l = width * height;
         for (let i = 0; i < l; i+=1)
@@ -115,8 +118,8 @@ export default class App extends Vue {
           if (dist < radius)
           {
             const theta = (Math.atan2(y - centerY, x - centerX) * (180/ Math.PI) + 360 + 90) % 360;
-            const hsl = { hue: (360 - theta + degreeOffset) % 360, saturation: 100, light: 100 * dist / radius }
-            const rgb = hslToRgb(hsl);
+            const hsl = { hue: (360 - theta + degreeOffset) % 360, saturation: 100, light: 100 * dist / radius, kind: hslKind }
+            const rgb = hslToRGB(hsl);
             arr[i*4] = rgb.red;
             arr[i*4 + 1] = rgb.green;
             arr[i*4 + 2] = rgb.blue;
@@ -124,6 +127,7 @@ export default class App extends Vue {
           }
         }
         arrayInitialized = true;
+        arrayInitializedWithKind = hslKind;
       }
 
       ctx.putImageData(imageData, 0, 0);
@@ -154,7 +158,7 @@ export default class App extends Vue {
           ctx.lineWidth = config.lineWidth;
           ctx.beginPath();
           ctx.arc(x + centerX, y + centerY, spotlightSize, 0, Math.PI * 2);
-          ctx.strokeStyle = hslToHex({hue: (hsl.hue + 180) % 360, saturation: 100, light: 100 - hsl.light});
+          ctx.strokeStyle = hslToHex({hue: (hsl.hue + 180) % 360, saturation: 100, light: 100 - hsl.light, kind: hslKind});
           ctx.fillStyle = hslToHex(hsl);
           ctx.stroke();
           ctx.fill();
@@ -232,7 +236,7 @@ export default class App extends Vue {
 
       const renderSingleColor = () => {
         const notes = this.midiBatcher.getNotes();
-        const colors = notesToColors(this.options.circle, notes);
+        const colors = notesToColors(this.options.circle, this.options.color, notes);
         if (colors.length == 0)
           tryClear();
         
@@ -248,7 +252,7 @@ export default class App extends Vue {
 
       const renderOvertonesGrid = () => {
         const notes = this.midiBatcher.getNotes();
-        const colors = notesToColors(this.options.circle, notes);
+        const colors = notesToColors(this.options.circle, this.options.color, notes);
         if (colors.length == 0)
           tryClear();
 
@@ -265,7 +269,7 @@ export default class App extends Vue {
       const pixelateConcentrically = () => {
         const notes = this.midiBatcher.getNotes();
         const velocities = notes.map(n => n.velocity);
-        const rawColors = notesToColors(this.options.circle, notes);
+        const rawColors = notesToColors(this.options.circle, this.options.color, notes);
         if (rawColors.length == 0)
           tryClear();
         
@@ -280,7 +284,7 @@ export default class App extends Vue {
           withOvertones.forEach(wcs => {
             const result: RGB[] = [];
             wcs.forEach(wc => {
-              const rgb = hslToRgb(wc.color);
+              const rgb = hslToRGB(wc.color);
               // todo: could write reusable function that looked at smallest weight and determined min number needed to have that represented once?
               for (let i = 0; i < Math.floor(100 * wc.weight); i++)
                 result.push(rgb);
@@ -291,7 +295,7 @@ export default class App extends Vue {
 
           const emergentDrawingPool: RGB[] = [];
           emergent.forEach(wc => {
-            const rgb = hslToRgb(wc.color);
+            const rgb = hslToRGB(wc.color);
             for (let i = 0; i < Math.floor(100 * wc.weight); i++)
               emergentDrawingPool.push(rgb);
           });
@@ -305,13 +309,16 @@ export default class App extends Vue {
       const renderColorWheel = () =>
       {
         const notes = this.midiBatcher.getNotes();
-        const rawColors = notesToColors(this.options.circle, notes);
+        const rawColors = notesToColors(this.options.circle, this.options.color, notes);
         const cs = [... rawColors];
         const withOvertones = cs.map(c => colorOvertones(c, this.options.overtone));
-        const emergent = colorOvertones(mixColors(this.options.mix, cs, notes.map(n => n.velocity)), this.options.overtone);
-        withOvertones.push(emergent);
+        if (withOvertones.length > 0)
+        {
+          const emergent = colorOvertones(mixColors(this.options.mix, cs, notes.map(n => n.velocity)), this.options.overtone);
+          withOvertones.push(emergent);
+        }
 
-        this.wheelDrawer(deepMap(withOvertones, wc => wc.color), this.options.wheelViewModeConfig, this.options.circle.degreeOffset);
+        this.wheelDrawer(deepMap(withOvertones, wc => wc.color), this.options, this.options.circle.degreeOffset);
       }
 
       const go = () => {
