@@ -22,6 +22,7 @@ import { HSL, RGB, notesToColors, hslToHex, mixColors, HexColor, colorOvertones,
 import { indexBy, deepMap, flipMap, drawRandom } from "./domain/util/util";
 import webmidi, { WebMidi } from "webmidi";
 import { RandomPixelator, makeRandomPixelator, RandomPixelatorConfig, doNothingRandomPixelator, makeRandomPixelatorConfig } from "./drawers/RandomPixelator"
+import { Box, BoxedImage, drawBoxedImage, makeBoxedImage, splitVertical, splitHorizontal } from "./drawers/drawing";
 
 type ColorWheelDrawer = (hslsWithOvertones: HSL[][], config: Options, degreeOffset: number) => void;
 
@@ -53,7 +54,7 @@ export default class App extends Vue {
       this.options.canvas.height = window.innerHeight;
       this.randomPixelator = makeRandomPixelator(this.ctx!, this.options.canvas);
       this.concentricPixelator = this.makeConcentricPixelator(this.ctx!, this.options.canvas);
-      this.wheelDrawer = this.makeColorWheelDrawer(this.ctx!, this.options.canvas);
+      this.wheelDrawer = this.makeColorWheelDrawer(this.ctx!, {width: this.options.canvas.width, height: this.options.canvas.height, xOrigin: 0, yOrigin: 0 });
   }
 
   created() {
@@ -64,7 +65,7 @@ export default class App extends Vue {
     window.removeEventListener("resize", this.resize);
   }
 
-  drawAll(ctx: CanvasRenderingContext2D, colors: HexColor[][], dimensions: CanvasOptions)
+  drawAll(ctx: CanvasRenderingContext2D, colors: HexColor[][], dimensions: Box)
   {
     const height = dimensions.height;
     const width = dimensions.width;
@@ -82,55 +83,109 @@ export default class App extends Vue {
         const thisColor = colorsInRow[c];
         ctx.beginPath();
         ctx.fillStyle = thisColor;
-        ctx.rect(c * colSize, r * rowSize, colSize, rowSize);
+        ctx.rect(c * colSize + dimensions.xOrigin, r * rowSize + dimensions.yOrigin, colSize, rowSize);
         ctx.fill();
       }
     }
   }
 
-  makeColorWheelDrawer(ctx: CanvasRenderingContext2D, dimensions: CanvasOptions): ColorWheelDrawer
-  {
-    const width = dimensions.width;
-    const height = dimensions.height;
+  makeLightColorWheel(hslKind: HSLType, box: Box, degreeOffset: number) {
+    const centerX = box.width / 2;
+    const centerY = box.height / 2;
+    const radius = Math.min(box.width, box.height) / 2;
+    console.log(box, centerX, centerY, radius);
 
-    const arr = new Uint8ClampedArray(width * height * 4);
-    const imageData = new ImageData(arr, width);
-
-    let arrayInitialized = false;
-    let arrayInitializedWithKind: HSLType | undefined = undefined;
-
-    return (hsls: HSL[][], allConfig: Options, degreeOffset: number) =>
-    {
-      const config = allConfig.wheelViewModeConfig;
-      const hslKind: HSLType = allConfig.color.standardHSL ? "standard": "okhsl";
-      const radius = Math.min(width, height) / 2;
-      const centerX = width / 2;
-      const centerY = height / 2;
-
-      if (!arrayInitialized || (arrayInitializedWithKind !== undefined && arrayInitializedWithKind !== hslKind))
-      {
-        const l = width * height;
-        for (let i = 0; i < l; i+=1)
-        {
-          const y = Math.floor(i / width);
-          const x = Math.floor(i - y * width);
+    return makeBoxedImage(box, (x: number, y: number) => {
           const dist = Math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY));
           if (dist < radius)
           {
             const theta = (Math.atan2(y - centerY, x - centerX) * (180/ Math.PI) + 360 + 90) % 360;
             const hsl = { hue: (360 - theta + degreeOffset) % 360, saturation: 100, light: 100 * dist / radius, kind: hslKind }
-            const rgb = hslToRGB(hsl);
-            arr[i*4] = rgb.red;
-            arr[i*4 + 1] = rgb.green;
-            arr[i*4 + 2] = rgb.blue;
-            arr[i*4 + 3] = 255;
+            return hslToRGB(hsl);
+          }
+          else
+          {
+            return {red: 0, green: 0, blue: 0, alpha: 0};
           }
         }
-        arrayInitialized = true;
+    );
+  }
+
+  makeSaturatedColorWheel(hslKind: HSLType, box: Box, degreeOffset: number) {
+    const centerX = box.width / 2
+    const centerY = box.height / 2
+    const radius = Math.min(box.width, box.height) / 2;
+
+    return makeBoxedImage(box, (x: number, y: number) => {
+          const dist = Math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY));
+          if (dist < radius)
+          {
+            const theta = (Math.atan2(y - centerY, x - centerX) * (180/ Math.PI) + 360 + 90) % 360;
+            const hsl = { hue: (360 - theta + degreeOffset) % 360, saturation: 100 * dist / radius, light: 50, kind: hslKind }
+            return hslToRGB(hsl);
+          }
+          else
+          {
+            return {red: 0, green: 0, blue: 0, alpha: 0};
+          }
+        }
+    );
+  }
+
+  makeColorWheelDrawer(ctx: CanvasRenderingContext2D, box: Box): ColorWheelDrawer
+  {
+    let lightCircleImage: BoxedImage | undefined = undefined;
+    let satCircleImage: BoxedImage | undefined = undefined;
+    let arrayInitializedWithKind: HSLType | undefined = undefined;
+
+    const [circleBoxes, gridBox] = splitHorizontal(box, 0.85);
+    const [lightCircleBox, satCircleBox] = splitVertical(circleBoxes, 0.5);
+    console.log(lightCircleBox, satCircleBox);
+
+    return (hsls: HSL[][], allConfig: Options, degreeOffset: number) =>
+    {
+      const config = allConfig.wheelViewModeConfig;
+      const hslKind: HSLType = allConfig.color.standardHSL ? "standard": "okhsl";
+
+      if (arrayInitializedWithKind == undefined || arrayInitializedWithKind !== hslKind)
+      {
+        lightCircleImage = this.makeLightColorWheel(hslKind, lightCircleBox, degreeOffset);
+        satCircleImage = this.makeSaturatedColorWheel(hslKind, satCircleBox, degreeOffset);
         arrayInitializedWithKind = hslKind;
       }
 
-      ctx.putImageData(imageData, 0, 0);
+      drawBoxedImage(ctx, lightCircleImage!);
+      drawBoxedImage(ctx, satCircleImage!);
+
+      const drawNoteInBox = (box: Box, hsl: HSL, i: number, magFn: (hsl: HSL) => number, isEmergent: boolean) => {
+        const centerX = box.width / 2 + box.xOrigin;
+        const centerY = box.height / 2 + box.yOrigin;
+        const radius = Math.min(box.width, box.height) / 2;
+
+        const spotlightSize = Math.floor(radius * config.spotlightScaleFactor  / (i + 1));
+        // const theta = 360 - ((hsl.hue - 90) * Math.PI / 180) % 360;
+        const theta = ((360 - hsl.hue - 90 + degreeOffset) % 360) * Math.PI / 180;
+        const magnitude = magFn(hsl) * radius / 100;
+        const x = magnitude * Math.cos(theta);
+        const y = magnitude * Math.sin(theta);
+        ctx.lineWidth = isEmergent ? config.lineWidth * 2 : config.lineWidth;
+        ctx.beginPath();
+        ctx.arc(x + centerX, y + centerY, isEmergent ? spotlightSize * 1.5 : spotlightSize, 0, Math.PI * 2);
+        ctx.strokeStyle = hslToHex({hue: (hsl.hue + 180) % 360, saturation: 100 - hsl.saturation, light: 100 - hsl.light, kind: hslKind});
+        ctx.fillStyle = hslToHex(hsl);
+        ctx.stroke();
+        ctx.fill();
+      }
+
+      ctx.clearRect(gridBox.xOrigin, gridBox.yOrigin, gridBox.width, gridBox.height);
+
+      if (config.showOvertones)
+      {
+        this.drawAll(ctx, deepMap(hsls, hslToHex), gridBox);
+      } else
+      {
+        this.drawAll(ctx, [hsls.map(hs => hslToHex(hs[0]))], gridBox);
+      }
 
       for (let j = 0; j < hsls.length; j++)
       {
@@ -142,28 +197,22 @@ export default class App extends Vue {
 
         const hslWithOvertones = hsls[j];
 
+        // ctx.beginPath();
+        // ctx.fillStyle = hslToHex(hslWithOvertones[0]);
+        // ctx.fillRect(gridBox.xOrigin + (gridBox.width / hsls.length) * j, gridBox.yOrigin, gridBox.width / hsls.length, gridBox.height);
+        // ctx.fill();
+
         for (let i = 0; i < hslWithOvertones.length; i++)
         {
           if (!config.showOvertones && i > 0)
             continue;
 
           const hsl = hslWithOvertones[i];
-
-          const spotlightSize = Math.floor(radius * config.spotlightScaleFactor  / (i + 1));
-          // const theta = 360 - ((hsl.hue - 90) * Math.PI / 180) % 360;
-          const theta = ((360 - hsl.hue - 90 + degreeOffset) % 360) * Math.PI / 180;
-          const magnitude = hsl.light * radius / 100;
-          const x = magnitude * Math.cos(theta);
-          const y = magnitude * Math.sin(theta);
-          ctx.lineWidth = config.lineWidth;
-          ctx.beginPath();
-          ctx.arc(x + centerX, y + centerY, spotlightSize, 0, Math.PI * 2);
-          ctx.strokeStyle = hslToHex({hue: (hsl.hue + 180) % 360, saturation: 100, light: 100 - hsl.light, kind: hslKind});
-          ctx.fillStyle = hslToHex(hsl);
-          ctx.stroke();
-          ctx.fill();
+          drawNoteInBox(lightCircleBox, hsl, i, hsl => hsl.light, j == hsls.length - 1);
+          drawNoteInBox(satCircleBox, hsl, i, hsl => hsl.saturation, j == hsls.length - 1);
         }
       }
+
     }
   }
 
@@ -261,7 +310,7 @@ export default class App extends Vue {
           const withOvertones = colors.map(c => colorOvertones(c, this.options.overtone).map(wc => wc.color));
           withOvertones.push(flipMap(withOvertones, c => mixColors(this.options.mix, c, notes.map(n => n.velocity))));
           const hexOvertones = deepMap(withOvertones, hslToHex);
-          this.drawAll(ctx, hexOvertones, this.options.canvas);
+          this.drawAll(ctx, hexOvertones, { width: this.options.canvas.width, height: this.options.canvas.height, xOrigin: 0, yOrigin: 0});
         }
       }
 

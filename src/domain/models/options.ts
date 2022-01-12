@@ -36,9 +36,9 @@ export type Options = {
 export const defaultOptions: Options = {
     display: { waitBeforeClearMilliseconds: 100, tickMilliseconds: 5},
     circle: { tonic: "C", degreeOffset: 60 },
-    color: { lightFloor: 5, lightCeiling: 95, saturationFloor: 80, saturationCeiling: 100, standardHSL: true, okHSL: false },
+    color: { lightFloor: 5, lightCeiling: 95, saturationFloor: 80, saturationCeiling: 100, standardHSL: false, okHSL: true },
     viewMode: { single: false, overtoneGrid: false, wheel: true, randomPixelation: false, concentricPixelation: true },
-    wheelViewModeConfig: { showOvertones : false, showEmergence: false, showEmergentOnly: false, lineWidth: 3, spotlightScaleFactor: 0.05},
+    wheelViewModeConfig: { showOvertones : false, showEmergence: true, showEmergentOnly: false, lineWidth: 3, spotlightScaleFactor: 0.05},
     canvas: { width: 1800, height: 1190 },
     mix: { rootBias: 1.5, melodyBias: 1.5, considerVelocity: true },
     render: { rootBias: 1, middleBias: 1, melodyBias: 1, emergentBias: 1 , emergentBiasFloor: 0.2},

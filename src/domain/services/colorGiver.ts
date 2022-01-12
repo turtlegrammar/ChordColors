@@ -32,12 +32,12 @@ export interface RGBA {
 
 export type HexColor = string;
 
-export function hslToRGB(color: HSL): RGB {
+export function hslToRGB(color: HSL): RGBA {
     if (color.kind == "standard") {
         return hslToRgbHelper(color);
     } else if (color.kind == "okhsl") {
         const r = okhsl_to_srgb(color.hue / 360, color.saturation / 100, color.light / 100);
-        return { red: r[0], green: r[1], blue: r[2]};
+        return { red: r[0], green: r[1], blue: r[2], alpha: 255};
     } else {
         throw "";
     }
@@ -56,7 +56,7 @@ export function hslToRGB(color: HSL): RGB {
  * 
  * https://stackoverflow.com/a/9493060
  */
-function hslToRgbHelper(hsl: HSL): RGB {
+function hslToRgbHelper(hsl: HSL): RGBA {
     const h = hsl.hue / 360.0;
     const l = hsl.light / 100.0;
     const s = hsl.saturation / 100.0;
@@ -82,7 +82,7 @@ function hslToRgbHelper(hsl: HSL): RGB {
         b = hue2rgb(p, q, h - 1/3);
     }
 
-    return {red: Math.round(r * 255), green: Math.round(g * 255), blue: Math.round(b * 255)};
+    return {red: Math.round(r * 255), green: Math.round(g * 255), blue: Math.round(b * 255), alpha: 255};
 }
 
 // https://stackoverflow.com/a/44134328
@@ -177,9 +177,11 @@ export function mixColors(biases: MixBias, colors: HSL[], velocities: number[]):
     return vectorToHsl(v, colors[0].kind);
 }
 
+// todo: use light and sat floor/ceiling here
 export function colorOvertones(color: HSL, config: OvertoneConfig): WeightedHSL[] {
-    const make = (h: number, l: number) => ({hue: h, light: l, saturation: color.saturation, kind: color.kind});
+    const make = (h: number, semitones: number) => ({hue: h, light: lighten(semitones), saturation: desaturate(semitones), kind: color.kind});
     const lighten = (semitones: number) => Math.min(100, (100/88) * semitones + color.light);
+    const desaturate = (semitones: number) => Math.max(0, color.saturation - (100 / 88) * semitones);
 
     let counter = 1;
 
@@ -194,17 +196,17 @@ export function colorOvertones(color: HSL, config: OvertoneConfig): WeightedHSL[
     // addition and subtraction are opposites because we need to move counterclockwise
     // around HSL. So, sharp: subtract; flat: add
     if (config.numberOvertones >= 1)
-        addOvertone(make(color.hue, lighten(12)));
+        addOvertone(make(color.hue, 12));
     if (config.numberOvertones >= 2)
-        addOvertone(make(color.hue - 31, lighten(19))); // octave and a fifth that's 2cents sharp
+        addOvertone(make(color.hue - 31, 19)); // octave and a fifth that's 2cents sharp
     if (config.numberOvertones >= 3) 
-        addOvertone(make(color.hue, lighten(24)));
+        addOvertone(make(color.hue, 24));
     if (config.numberOvertones >= 4)
-        addOvertone(make((color.hue - 120 + 15 * 14/50) %  360, lighten(28))); // major third that's 14 cents flat
+        addOvertone(make((color.hue - 120 + 15 * 14/50) %  360, 28)); // major third that's 14 cents flat
     if (config.numberOvertones >= 5)
-        addOvertone(make(color.hue - 31, lighten(31)));
+        addOvertone(make(color.hue - 31, 31));
     if (config.numberOvertones >= 6)
-        addOvertone(make((color.hue + 60 + 15 * 31/50) % 360, lighten(34))); // minor seventh 31 cents flat
+        addOvertone(make((color.hue + 60 + 15 * 31/50) % 360, 34)); // minor seventh 31 cents flat
 
     normalizeWeights(result);
 
