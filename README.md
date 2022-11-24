@@ -1,29 +1,7 @@
 # chordcolors
 
-## Project setup
-```
-npm install
-```
+Watch these in 4k if possible...
 
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
+https://www.youtube.com/watch?v=p_vvABPcAr4
 
-### Compiles and minifies for production
-```
-npm run build
-```
-
-### Run your unit tests
-```
-npm run test:unit
-```
-
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+https://www.youtube.com/watch?v=l7AW7QXj9SE
